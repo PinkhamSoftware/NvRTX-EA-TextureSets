@@ -15,7 +15,7 @@ class UTextureSetDerivedData;
 class TEXTURESETSCOMPILER_API FTextureSetCompilerTaskWorker : public FNonAbandonableTask
 {
 public:
-	FTextureSetCompilerTaskWorker (TSharedRef<FTextureSetCompiler> Compiler, UTextureSetDerivedData* DerivedData, bool bIsDefaultTextureSet);
+	FTextureSetCompilerTaskWorker (TSharedRef<FTextureSetCompiler> Compiler, UTextureSetDerivedData* DerivedData);
 
 	FORCEINLINE TStatId GetStatId() const { RETURN_QUICK_DECLARE_CYCLE_STAT(FTextureSetCompilerTaskWorker, STATGROUP_ThreadPoolAsyncTasks); }
 	void DoWork();
@@ -23,13 +23,12 @@ public:
 private:
 	TSharedRef<FTextureSetCompiler> Compiler;
 	TStrongObjectPtr<UTextureSetDerivedData> DerivedData;
-	bool bIsDefaultTextureSet;
 };
 
 class TEXTURESETSCOMPILER_API TextureSetCompilerTask
 {
 public:
-	TextureSetCompilerTask(TSharedRef<FTextureSetCompiler> Compiler, bool bIsDefaultTextureSet);
+	TextureSetCompilerTask(TSharedRef<FTextureSetCompiler> Compiler);
 
 	void Start();
 	void StartAsync(FQueuedThreadPool* InQueuedPool, EQueuedWorkPriority InQueuedWorkPriority);
@@ -48,9 +47,7 @@ private:
 
 	const TSharedRef<FTextureSetCompiler> Compiler;
 	TStrongObjectPtr<UTextureSetDerivedData> DerivedData;
-	bool bIsDefaultTextureSet;
 	bool bHasBeganTextureCache;
-	bool bHasAddedSourceProviders;
 	bool bHasFinalized;
 
 	TUniquePtr<FAsyncTask<FTextureSetCompilerTaskWorker>> AsyncTask;

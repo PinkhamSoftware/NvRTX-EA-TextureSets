@@ -57,7 +57,7 @@ bool UTextureSet::IsCompiling() const
 }
 #endif
 
-void UTextureSet::AugmentMaterialTextureParameters(const FCustomParameterValue& CustomParameter, TArray<FTextureParameterValue>& TextureParameters) const
+void UTextureSet::BuildMaterialTextureParameters(const FMaterialParameterInfo& ParameterInfo, TArray<FTextureParameterValue>& TextureParameters) const
 {
 	if (!IsValid(Definition))
 		return;
@@ -70,7 +70,7 @@ void UTextureSet::AugmentMaterialTextureParameters(const FCustomParameterValue& 
 			// Fall back to the default texture set if possible
 			if(IsValid(Definition->GetDefaultTextureSet()) && !this->IsDefaultTextureSet())
 			{
-				Definition->GetDefaultTextureSet()->AugmentMaterialParameters(CustomParameter, TextureParameters);
+				Definition->GetDefaultTextureSet()->BuildMaterialTextureParameters(ParameterInfo, TextureParameters);
 			}
 			return;
 		}
@@ -92,14 +92,14 @@ void UTextureSet::AugmentMaterialTextureParameters(const FCustomParameterValue& 
 		// Set the texture parameter for each packed texture
 		FTextureParameterValue TextureParameter;
 		TextureParameter.ParameterValue = DerivedData->Textures[i].Texture;
-		TextureParameter.ParameterInfo.Name = TextureSetsHelpers::MakeTextureParameterName(CustomParameter.ParameterInfo.Name, i);
-		TextureParameter.ParameterInfo.Association = CustomParameter.ParameterInfo.Association;
-		TextureParameter.ParameterInfo.Index = CustomParameter.ParameterInfo.Index;
+		TextureParameter.ParameterInfo.Name = TextureSetsHelpers::MakeTextureParameterName(ParameterInfo.Name, i);
+		TextureParameter.ParameterInfo.Association = ParameterInfo.Association;
+		TextureParameter.ParameterInfo.Index = ParameterInfo.Index;
 		TextureParameters.Add(TextureParameter);
 	}
 }
 
-void UTextureSet::AugmentMaterialVectorParameters(const FCustomParameterValue& CustomParameter, TArray<FVectorParameterValue>& VectorParameters) const
+void UTextureSet::BuildMaterialVectorParameters(const FMaterialParameterInfo& ParameterInfo, TArray<FVectorParameterValue>& VectorParameters) const
 {
 	if (!IsValid(Definition))
 		return;
@@ -112,7 +112,7 @@ void UTextureSet::AugmentMaterialVectorParameters(const FCustomParameterValue& C
 			// Fall back to the default texture set if possible
 			if (IsValid(Definition->GetDefaultTextureSet()) && !this->IsDefaultTextureSet())
 			{
-				Definition->GetDefaultTextureSet()->AugmentMaterialParameters(CustomParameter, VectorParameters);
+				Definition->GetDefaultTextureSet()->BuildMaterialVectorParameters(ParameterInfo, VectorParameters);
 			}
 			return;
 		}
@@ -131,9 +131,9 @@ void UTextureSet::AugmentMaterialVectorParameters(const FCustomParameterValue& C
 	{
 		FVectorParameterValue Parameter;
 		Parameter.ParameterValue = FLinearColor(Data.Value);
-		Parameter.ParameterInfo.Name = TextureSetsHelpers::MakeConstantParameterName(CustomParameter.ParameterInfo.Name, ParameterName);
-		Parameter.ParameterInfo.Association = CustomParameter.ParameterInfo.Association;
-		Parameter.ParameterInfo.Index = CustomParameter.ParameterInfo.Index;
+		Parameter.ParameterInfo.Name = TextureSetsHelpers::MakeConstantParameterName(ParameterInfo.Name, ParameterName);
+		Parameter.ParameterInfo.Association = ParameterInfo.Association;
+		Parameter.ParameterInfo.Index = ParameterInfo.Index;
 		VectorParameters.Add(Parameter);
 	}
 
@@ -146,9 +146,9 @@ void UTextureSet::AugmentMaterialVectorParameters(const FCustomParameterValue& C
 		{
 			FVectorParameterValue Parameter;
 			Parameter.ParameterValue = FLinearColor(Value);
-			Parameter.ParameterInfo.Name = TextureSetsHelpers::MakeConstantParameterName(CustomParameter.ParameterInfo.Name, ParameterName);
-			Parameter.ParameterInfo.Association = CustomParameter.ParameterInfo.Association;
-			Parameter.ParameterInfo.Index = CustomParameter.ParameterInfo.Index;
+			Parameter.ParameterInfo.Name = TextureSetsHelpers::MakeConstantParameterName(ParameterInfo.Name, ParameterName);
+			Parameter.ParameterInfo.Association = ParameterInfo.Association;
+			Parameter.ParameterInfo.Index = ParameterInfo.Index;
 			VectorParameters.Add(Parameter);
 		}
 	}
