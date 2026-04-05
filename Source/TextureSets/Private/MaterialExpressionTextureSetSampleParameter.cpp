@@ -88,15 +88,19 @@ void UMaterialExpressionTextureSetSampleParameter::SetParameterName(const FName&
 bool UMaterialExpressionTextureSetSampleParameter::GetParameterValue(FMaterialParameterMetadata& OutMeta) const
 {
 	UTexture* DefaultTexture = nullptr;
-	const UTextureSet* DefaultSet = DefaultTextureSet.Get();
-	if (!IsValid(DefaultSet) && IsValid(Definition))
+	const UTextureSet* DefaultSet = nullptr;
+	if (IsValid(Definition))
 	{
 		DefaultSet = Definition->GetDefaultTextureSet();
+	}
+	if (!IsValid(DefaultSet))
+	{
+		DefaultSet = DefaultTextureSet.Get();
 	}
 
 	if (IsValid(DefaultSet))
 	{
-		const UTextureSetDerivedData* DerivedData = DefaultSet->GetDerivedData();
+		const UTextureSetDerivedData* DerivedData = DefaultSet->TryGetDerivedData();
 		if (DerivedData != nullptr && !DerivedData->Textures.IsEmpty())
 		{
 			DefaultTexture = DerivedData->Textures[0].Texture;

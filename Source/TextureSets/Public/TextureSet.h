@@ -79,6 +79,7 @@ public:
 	// Fetch from cache, or re-compute the derived data
 	void UpdateDerivedData(bool bAllowAsync, bool bStartImmediately = false);
 #endif
+	const UTextureSetDerivedData* TryGetDerivedData() const;
 	const UTextureSetDerivedData* GetDerivedData() const;
 	const FString& GetUserKey() const { return UserKey; }
 

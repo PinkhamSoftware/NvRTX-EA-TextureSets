@@ -562,13 +562,13 @@ void FTextureSetCompilingManager::AssignDerivedData(UTextureSetDerivedData* NewD
 	NewDerivedData->Rename(*DerivedDataName, TextureSet, RenameFlags);
 	TextureSet->DerivedData = NewDerivedData;
 
-	// Default texture set derived textures need to be public so they can be referenced as default textures in the generated graphs.
-	if (TextureSet->IsDefaultTextureSet())
-	{
-		NewDerivedData->SetFlags(RF_Public);
+	// The plugin-only port stores direct texture references in material instances and graph defaults.
+	// Keep all derived objects public so cross-package references remain legal.
+	NewDerivedData->SetFlags(RF_Public);
 
-		for (FDerivedTexture& DerivedTexture : NewDerivedData->Textures)
-			DerivedTexture.Texture->SetFlags(RF_Public);
+	for (FDerivedTexture& DerivedTexture : NewDerivedData->Textures)
+	{
+		DerivedTexture.Texture->SetFlags(RF_Public);
 	}
 }
 

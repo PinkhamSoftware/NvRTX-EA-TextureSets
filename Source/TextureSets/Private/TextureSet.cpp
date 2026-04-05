@@ -387,12 +387,17 @@ void UTextureSet::UpdateDerivedData(bool bAllowAsync, bool bStartImmediately)
 
 const UTextureSetDerivedData* UTextureSet::GetDerivedData() const
 {
-	#if WITH_EDITOR
+	const UTextureSetDerivedData* LocalDerivedData = TryGetDerivedData();
+	check(LocalDerivedData);
+	return LocalDerivedData;
+}
+
+const UTextureSetDerivedData* UTextureSet::TryGetDerivedData() const
+{
+#if WITH_EDITOR
 	// If called in the editor it's possible we haven't updated our derived data yet, so stall here until we do.
 	((UTextureSet*)this)->UpdateDerivedData(false, true);
-	#endif
-
-	check(DerivedData);
+#endif
 	return DerivedData.Get();
 }
 
