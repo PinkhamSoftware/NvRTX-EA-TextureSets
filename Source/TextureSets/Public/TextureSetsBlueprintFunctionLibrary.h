@@ -11,7 +11,7 @@
  * 
  */
 UCLASS()
-class UTextureSetsBlueprintFunctionLibrary : public UBlueprintFunctionLibrary
+class TEXTURESETS_API UTextureSetsBlueprintFunctionLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 
@@ -28,10 +28,17 @@ public:
 		const FMaterialParameterInfo& ParameterInfo,
 		UTextureSet* Value);
 
+	// Applies a texture set to a material instance by writing standard texture/vector parameter overrides.
+	static bool ApplyTextureSetParameterToMaterialInstance(
+		UMaterialInstance* MaterialInstance,
+		const FMaterialParameterInfo& ParameterInfo,
+		UTextureSet* Value,
+		bool bUpdateBinding = true);
+
 private:
 	// Set the parameters on the MI derived from the texture set parameter (Vector, Texture parameters)
 	static void SetDerivedTextureSetParameters(
-		UMaterialInstanceDynamic* MID,
+		UMaterialInstance* MaterialInstance,
 		const FMaterialParameterInfo& ParameterInfo,
 		UTextureSet* NewTextureSetValue);
 	

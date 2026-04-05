@@ -10,8 +10,6 @@ class IAssetTools;
 class IAssetTypeActions;
 class IDetailCategoryBuilder;
 class UFactory;
-class UMaterialInstanceConstant;
-class FTextureSetParameterEditor;
 
 class FTextureSetsEditorModule : public IModuleInterface
 {
@@ -27,11 +25,7 @@ private:
 	void RegisterCustomizations();
 	void UnregisterCustomizations();
 
-	FDelegateHandle OnMaterialInstanceOpenedForEditHandle;
-
 	TArray<TSharedRef<IAssetTypeActions>> RegisteredAssetTypeActions;
-
-	TSharedPtr<FTextureSetParameterEditor> ParameterEditor;
 
 	FDelegateHandle OnGetExtraObjectTagsDelegateHandle;
 	static void OnGetExtraObjectTagsWithContext(FAssetRegistryTagsContext Context);

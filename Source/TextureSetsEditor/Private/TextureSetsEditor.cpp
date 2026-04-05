@@ -3,130 +3,24 @@
 #include "TextureSetsEditor.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "Engine/AssetManager.h"
+#include "AssetToolsModule.h"
 #include "AssetTypeActions/AssetTypeActions_TextureSet.h"
 #include "AssetTypeActions/AssetTypeActions_TextureSetDefinition.h"
-#include "DEditorTextureSetParameterValue.h"
-#include "DetailWidgetRow.h"
-#include "IDetailGroup.h"
-#include "IDetailTreeNode.h"
-#include "IMaterialEditor.h"
-#include "Interfaces/IPluginManager.h"
-#include "MaterialEditor/DEditorParameterValue.h"
+#include "Editor.h"
 #include "MaterialEditor/MaterialEditorInstanceConstant.h"
-#include "MaterialEditorModule.h"
-#include "MaterialExpressionTextureSetSampleParameter.h"
-#include "MaterialPropertyHelpers.h"
-#include "Materials/Material.h"
-#include "Materials/MaterialFunctionInterface.h"
 #include "Materials/MaterialInstanceConstant.h"
-#include "PropertyCustomizationHelpers.h"
 #include "TextureSet.h"
 #include "TextureSetAssetParamsCollectionCustomization.h"
-#include "TextureSetDefinition.h"
+#include "TextureSetMaterialInstanceCustomization.h"
 #include "TextureSetSourceTextureReferenceCustomization.h"
 #include "TextureSetThumbnailRenderer.h"
 #include "TextureSetsHelpers.h"
 #include "UObject/Object.h"
 #include "UObject/AssetRegistryTagsContext.h"
+#include "PropertyEditorModule.h"
+#include "Subsystems/ImportSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "FTextureSetsModule"
-
-class FTextureSetParameterEditor : public ICustomMaterialParameterEditor
-{
-	virtual bool CanHandleParam(TObjectPtr<UDEditorCustomParameterValue> Param) override
-	{
-		return Param.GetClass() == UDEditorTextureSetParameterValue::StaticClass();
-	}
-
-	virtual void CreateWidget(CreateWidgetArguments& Args) override
-	{
-		UMaterialExpressionTextureSetSampleParameter* SamplerExpression = nullptr;
-
-		if (Args.Parameter->ExpressionId.IsValid())
-		{
-
-			if (Args.Parameter->ParameterInfo.Association == EMaterialParameterAssociation::GlobalParameter)
-			{
-				if ( Args.Material != nullptr)
-					SamplerExpression = Args.Material->FindExpressionByGUID<UMaterialExpressionTextureSetSampleParameter>(Args.Parameter->ExpressionId);
-			}
-			else if (Args.MaterialInstance)
-			{
-				FMaterialLayersFunctions Layers;
-				Args.MaterialInstance->GetMaterialLayers(Layers);
-
-				UMaterialFunctionInterface* LayerFunction = nullptr;
-
-				if (Args.Parameter->ParameterInfo.Association == EMaterialParameterAssociation::LayerParameter)
-				{
-					LayerFunction = Layers.Layers[Args.Parameter->ParameterInfo.Index];
-				}
-				else if (Args.Parameter->ParameterInfo.Association == EMaterialParameterAssociation::BlendParameter)
-				{
-					LayerFunction = Layers.Blends[Args.Parameter->ParameterInfo.Index];
-				}
-
-				if (LayerFunction)
-				{
-					SamplerExpression = Args.Material->FindExpressionByGUID<UMaterialExpressionTextureSetSampleParameter>(Args.Parameter->ExpressionId, LayerFunction);
-				}
-			}
-		}
-
-		if (IsValid(SamplerExpression))
-		{
-			TSharedPtr<SVerticalBox> NameVerticalBox;
-			const FText ParameterName = FText::Format(INVTEXT("{0}\n({1})"),
-				FText::FromName(Args.Parameter->ParameterInfo.Name),
-				FText::FromString(SamplerExpression->Definition.GetName()));
-
-			FDetailWidgetRow& CustomWidget = Args.Row->CustomWidget();
-			CustomWidget
-				.FilterString(ParameterName)
-				.NameContent()
-				[
-					SAssignNew(NameVerticalBox, SVerticalBox)
-					+ SVerticalBox::Slot()
-					.AutoHeight()
-				[
-					SNew(STextBlock)
-					.Text(ParameterName)
-					.ToolTipText(FText::FromString(Args.Parameter->Description))
-					.Font(FAppStyle::GetFontStyle(TEXT("PropertyWindow.NormalFont")))
-				]
-				];
-			CustomWidget.ValueContent()
-				[
-					SNew(SObjectPropertyEntryBox)
-					.PropertyHandle(Args.ParameterValueProperty)
-					.AllowedClass(UTextureSet::StaticClass())
-					.DisplayThumbnail(true)
-					.ThumbnailPool(UThumbnailManager::Get().GetSharedThumbnailPool())
-					.OnShouldFilterAsset_Lambda([SamplerExpression](const FAssetData& AssetData)
-						{
-							if (!SamplerExpression)
-								return false;
-
-							FAssetTagValueRef DefinitionIdValue = AssetData.TagsAndValues.FindTag("TextureSetDefinitionID");
-							if (DefinitionIdValue.IsSet())
-							{
-								// Prefer to compare with the asset tag to avoid loading each texture set just to check it's definition.
-								const FString AssetDefinitionID = DefinitionIdValue.AsString();
-								const FString ExpressionDefinitionID = SamplerExpression->Definition->GetGuid().ToString();
-								return AssetDefinitionID != ExpressionDefinitionID;
-							}
-							else
-							{
-								// No definition ID was found, so we need to load the texture set to know if it references the right definition.
-								UTextureSet* TextureSetAsset = CastChecked<UTextureSet>(AssetData.GetAsset());
-								return TextureSetAsset->Definition != SamplerExpression->Definition;
-							}
-						})
-				];
-		}
-	}
-};
 
 void FTextureSetsEditorModule::StartupModule()
 {
@@ -138,9 +32,6 @@ void FTextureSetsEditorModule::StartupModule()
 	RegisterAssetTypeAction(AssetTools, MakeShareable(new FAssetTypeActions_TextureSetDefinition));
 
 	RegisterCustomizations();
-
-	ParameterEditor = MakeShared<FTextureSetParameterEditor>();
-	FMaterialPropertyHelpers::RegisterCustomParameterEditor(ParameterEditor);
 
 	OnGetExtraObjectTagsDelegateHandle = UObject::FAssetRegistryTag::OnGetExtraObjectTagsWithContext.AddStatic(&FTextureSetsEditorModule::OnGetExtraObjectTagsWithContext);
 
@@ -160,9 +51,6 @@ void FTextureSetsEditorModule::ShutdownModule()
 {
 	UnregisterAssetTypeActions();
 	UnregisterCustomizations();
-
-	FMaterialPropertyHelpers::UnregisterCustomParameterEditor(ParameterEditor);
-	ParameterEditor.Reset();
 
 	UObject::FAssetRegistryTag::OnGetExtraObjectTagsWithContext.Remove(OnGetExtraObjectTagsDelegateHandle);
 	
@@ -208,6 +96,12 @@ void FTextureSetsEditorModule::RegisterCustomizations()
 
 	PropertyModule.RegisterCustomPropertyTypeLayout(FTextureSetAssetParamsCollectionCustomization::GetPropertyTypeName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FTextureSetAssetParamsCollectionCustomization::MakeInstance));
 	PropertyModule.RegisterCustomPropertyTypeLayout(FTextureSetSourceTextureReferenceCustomization::GetPropertyTypeName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FTextureSetSourceTextureReferenceCustomization::MakeInstance));
+	PropertyModule.RegisterCustomClassLayout(
+		UMaterialInstanceConstant::StaticClass()->GetFName(),
+		FOnGetDetailCustomizationInstance::CreateStatic(&FTextureSetMaterialInstanceCustomization::MakeInstance));
+	PropertyModule.RegisterCustomClassLayout(
+		UMaterialEditorInstanceConstant::StaticClass()->GetFName(),
+		FOnGetDetailCustomizationInstance::CreateStatic(&FTextureSetMaterialInstanceCustomization::MakeInstance));
 }
 
 void FTextureSetsEditorModule::UnregisterCustomizations()
@@ -216,6 +110,8 @@ void FTextureSetsEditorModule::UnregisterCustomizations()
 
 	PropertyModule.UnregisterCustomPropertyTypeLayout(FTextureSetAssetParamsCollectionCustomization::GetPropertyTypeName());
 	PropertyModule.UnregisterCustomPropertyTypeLayout(FTextureSetSourceTextureReferenceCustomization::GetPropertyTypeName());
+	PropertyModule.UnregisterCustomClassLayout(UMaterialInstanceConstant::StaticClass()->GetFName());
+	PropertyModule.UnregisterCustomClassLayout(UMaterialEditorInstanceConstant::StaticClass()->GetFName());
 }
 
 void FTextureSetsEditorModule::OnGetExtraObjectTagsWithContext(FAssetRegistryTagsContext Context)

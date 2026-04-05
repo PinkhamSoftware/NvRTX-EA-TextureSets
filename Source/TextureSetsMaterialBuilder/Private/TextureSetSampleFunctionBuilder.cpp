@@ -50,7 +50,6 @@ FTextureSetSampleFunctionBuilder::FTextureSetSampleFunctionBuilder(const FTextur
 		Meta.Value.Type = EMaterialParameterType::Texture;
 		Meta.Value.Texture = DefaultTexture;
 		Meta.Group = Args.ParameterGroup;
-		Meta.bHidden = true;
 		TextureObject->SetParameterValue(PackedTextureName, Meta, EMaterialExpressionSetParameterValueFlags::AssignGroupAndSortPriority);
 		TextureObject->UpdateParameterGuid(true, true);
 		EncodedTextureObjects.Add(TextureObject);
@@ -343,7 +342,6 @@ UMaterialExpression* FTextureSetSampleFunctionBuilder::MakeConstantParameter(FNa
 	NewParam->ParameterName = TextureSetsHelpers::MakeConstantParameterName(Args.ParameterName, Name);
 	NewParam->DefaultValue = FLinearColor(Default);
 	NewParam->Group = Args.ParameterGroup;
-	NewParam->bHidden = true;
 
 	// Main pin on the parameter is actually a float3, need to append the alpha to make it a float4.
 	UMaterialExpression* AppendNode = CreateExpression<UMaterialExpressionAppendVector>();
@@ -692,7 +690,6 @@ UMaterialExpression* FTextureSetSampleFunctionBuilder::BuildTextureDecodeNode(in
 	const bool bVirtualTextureStreaming = TextureDef.bVirtualTextureStreaming;
 
 	UMaterialExpressionCustom* CustomExp = CreateExpression<UMaterialExpressionCustom>();
-	CustomExp->SamplerSourceMode = SSM_Wrap_WorldGroupSettings;
 	CustomExp->Inputs.Empty(); // required: class initializes with one input by default
 	CustomExp->IncludeFilePaths.Add("/Engine/Private/Common.ush");
 	CustomExp->Code = "";

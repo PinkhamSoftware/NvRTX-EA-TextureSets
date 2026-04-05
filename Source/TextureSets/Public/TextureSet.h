@@ -18,12 +18,11 @@ class FTextureSetProcessingGraph;
 struct FTextureSetProcessingContext;
 
 UCLASS(BlueprintType, hidecategories = (Object))
-class TEXTURESETS_API UTextureSet : public UObject, public ICustomMaterialParameterInterface, public IInterface_AsyncCompilation
+class TEXTURESETS_API UTextureSet : public UObject, public IInterface_AsyncCompilation
 {
 	GENERATED_UCLASS_BODY()
 
 	friend class FTextureSetCompilingManager;
-	friend class UTextureSetTextureSourceProvider;
 public:
 	UPROPERTY(EditAnywhere, Category="TextureSet", BlueprintReadWrite)
 	TObjectPtr<UTextureSetDefinition> Definition;
@@ -55,9 +54,9 @@ public:
 	virtual bool IsCompiling() const override;
 #endif
 
-	// ICustomMaterialParameterInterface
-	virtual void AugmentMaterialTextureParameters(const FCustomParameterValue& CustomParameter, TArray<FTextureParameterValue>& TextureParameters) const override;
-	virtual void AugmentMaterialVectorParameters(const FCustomParameterValue& CustomParameter, TArray<FVectorParameterValue>& VectorParameters) const override;
+	// Build standard material parameter overrides produced by this texture set.
+	void BuildMaterialTextureParameters(const FMaterialParameterInfo& ParameterInfo, TArray<FTextureParameterValue>& TextureParameters) const;
+	void BuildMaterialVectorParameters(const FMaterialParameterInfo& ParameterInfo, TArray<FVectorParameterValue>& VectorParameters) const;
 
 	// UObject Interface
 	virtual void Serialize(FArchive& Ar) override;
@@ -80,6 +79,7 @@ public:
 	// Fetch from cache, or re-compute the derived data
 	void UpdateDerivedData(bool bAllowAsync, bool bStartImmediately = false);
 #endif
+	const UTextureSetDerivedData* TryGetDerivedData() const;
 	const UTextureSetDerivedData* GetDerivedData() const;
 	const FString& GetUserKey() const { return UserKey; }
 

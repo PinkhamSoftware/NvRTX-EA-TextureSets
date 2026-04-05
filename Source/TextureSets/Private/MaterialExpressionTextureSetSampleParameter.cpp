@@ -87,19 +87,33 @@ void UMaterialExpressionTextureSetSampleParameter::SetParameterName(const FName&
 #if WITH_EDITOR
 bool UMaterialExpressionTextureSetSampleParameter::GetParameterValue(FMaterialParameterMetadata& OutMeta) const
 {
-	OutMeta.Value = DefaultTextureSet.Get();
-	if (!IsValid(DefaultTextureSet.Get()) && IsValid(Definition))
+	UTexture* DefaultTexture = nullptr;
+	const UTextureSet* DefaultSet = nullptr;
+	if (IsValid(Definition))
 	{
-		OutMeta.Value = Definition->GetDefaultTextureSet();
+		DefaultSet = Definition->GetDefaultTextureSet();
 	}
+	if (!IsValid(DefaultSet))
+	{
+		DefaultSet = DefaultTextureSet.Get();
+	}
+
+	if (IsValid(DefaultSet))
+	{
+		const UTextureSetDerivedData* DerivedData = DefaultSet->TryGetDerivedData();
+		if (DerivedData != nullptr && !DerivedData->Textures.IsEmpty())
+		{
+			DefaultTexture = DerivedData->Textures[0].Texture;
+		}
+	}
+
+	OutMeta.Value = DefaultTexture;
 	
 	OutMeta.Description = Desc;
 	OutMeta.ExpressionGuid = ExpressionGUID;
 	OutMeta.Group = Group;
 	OutMeta.SortPriority = SortPriority;
 	OutMeta.AssetPath = GetAssetPathName();
-	// Parameter class will be null when executable is compiled with editor, but run standalone, as the TextureSetsEditor module will not be loaded.
-	OutMeta.CustomParameterClass = FindObject<UClass>(FTopLevelAssetPath("/Script/TextureSetsEditor.DEditorTextureSetParameterValue"));
 	return true;
 }
 #endif
@@ -107,31 +121,35 @@ bool UMaterialExpressionTextureSetSampleParameter::GetParameterValue(FMaterialPa
 #if WITH_EDITOR
 bool UMaterialExpressionTextureSetSampleParameter::SetParameterValue(const FName& Name, const FMaterialParameterMetadata& Meta, EMaterialExpressionSetParameterValueFlags Flags)
 {
-	if (Meta.Value.Type == EMaterialParameterType::Custom)
+	if (Meta.Value.Type == EMaterialParameterType::Texture)
 	{
-		// Null values are valid, objects that fail to cast to a texture set are not
-		UTextureSet* TextureSetValue = Cast<UTextureSet>(Meta.Value.AsCustomObject());
-		if (IsValid(TextureSetValue) || Meta.Value.AsCustomObject() == nullptr)
+		UTextureSet* TextureSetValue = nullptr;
+		if (UTexture* TextureValue = Meta.Value.Texture)
 		{
-			if (Name == ParameterName)
+			if (UTextureSetDerivedData* DerivedData = Cast<UTextureSetDerivedData>(TextureValue->GetOuter()))
 			{
-				DefaultTextureSet = TextureSetValue;
-
-				if (EnumHasAnyFlags(Flags, EMaterialExpressionSetParameterValueFlags::SendPostEditChangeProperty))
-				{
-					FProperty* Property = FindFProperty<FProperty>(StaticClass(), TEXT("DefaultTextureSet"));
-					FPropertyChangedEvent Event(Property);
-					PostEditChangeProperty(Event);
-				}
-
-				if (EnumHasAnyFlags(Flags, EMaterialExpressionSetParameterValueFlags::AssignGroupAndSortPriority))
-				{
-					Group = Meta.Group;
-					SortPriority = Meta.SortPriority;
-				}
-
-				return true;
+				TextureSetValue = Cast<UTextureSet>(DerivedData->GetOuter());
 			}
+		}
+
+		if (Name == ParameterName)
+		{
+			DefaultTextureSet = TextureSetValue;
+
+			if (EnumHasAnyFlags(Flags, EMaterialExpressionSetParameterValueFlags::SendPostEditChangeProperty))
+			{
+				FProperty* Property = FindFProperty<FProperty>(StaticClass(), TEXT("DefaultTextureSet"));
+				FPropertyChangedEvent Event(Property);
+				PostEditChangeProperty(Event);
+			}
+
+			if (EnumHasAnyFlags(Flags, EMaterialExpressionSetParameterValueFlags::AssignGroupAndSortPriority))
+			{
+				Group = Meta.Group;
+				SortPriority = Meta.SortPriority;
+			}
+
+			return true;
 		}
 	}
 	return false;

@@ -14,7 +14,8 @@
 #include "TextureSet.h"
 #include "TextureSetCompiler.h"
 #include "TextureSetDefinition.h"
-#include "TextureSetTextureSourceProvider.h"
+#include "TextureSetMaterialBindingData.h"
+#include "TextureSetsBlueprintFunctionLibrary.h"
 #include "TextureSetsHelpers.h"
 
 #define LOCTEXT_NAMESPACE "TextureSets"
@@ -230,7 +231,7 @@ void FTextureSetCompilingManager::StartCompilation(UTextureSet* const TextureSet
 
 	if (Compiler->CompilationRequired(TextureSet->DerivedData.Get()))
 	{
-		TSharedPtr<TextureSetCompilerTask> Task = MakeShared<TextureSetCompilerTask>(Compiler, TextureSet->IsDefaultTextureSet());
+		TSharedPtr<TextureSetCompilerTask> Task = MakeShared<TextureSetCompilerTask>(Compiler);
 
 		if (bAsync && IsAsyncCompilationAllowed())
 		{
@@ -493,55 +494,45 @@ void FTextureSetCompilingManager::RefreshMaterialInstances()
 	{
 		for (TObjectIterator<UMaterialInstance> It; It; ++It)
 		{
-			TObjectPtr<const UTextureSet> ContainedTextureSet = nullptr;
-			for (FCustomParameterValue& Param : It->CustomParameterValues)
+			const TArray<FTextureSetMaterialBinding> AllBindings = TextureSetMaterialBinding::GetAllBindings(*It, true);
+			if (AllBindings.IsEmpty())
 			{
-				const UTextureSet* TextureSet = Cast<UTextureSet>(Param.ParameterValue);
-				if (IsValid(TextureSet) && MaterialInstancesToUpdate.Contains(TextureSet))
+				continue;
+			}
+
+			TArray<FTextureSetMaterialBinding> BindingsToApply;
+			for (const FTextureSetMaterialBinding& Binding : AllBindings)
+			{
+				if (IsValid(Binding.TextureSet) && MaterialInstancesToUpdate.Contains(Binding.TextureSet.Get()))
 				{
-					ContainedTextureSet = TextureSet;
-					break; // Don't need to check other properties, since we've already refreshed this one
+					BindingsToApply.Add(Binding);
 				}
 			}
 
-			// Check if the material instance has overrides for the TS in a layer
-			FMaterialLayersFunctions Functions;
-			It->GetMaterialLayers(Functions);
-			for (int32 LayerIndex = 0;
-				LayerIndex < Functions.GetRuntime().Layers.Num() && !IsValid(ContainedTextureSet);
-				LayerIndex += 1)
+			if (BindingsToApply.IsEmpty())
 			{
-				const TObjectPtr<UMaterialFunctionInstance> LayerInstance
-					= IsValid(Functions.GetRuntime().Layers[LayerIndex])
-					? Cast<UMaterialFunctionInstance>(Functions.GetRuntime().Layers[LayerIndex])
-					: nullptr;
-				
-				if (!IsValid(LayerInstance))
-				{
-					continue;
-				}
+				continue;
+			}
 
-				for (FCustomParameterValue& Param : LayerInstance->CustomParameterValues)
+			if (AllDependenciesLoaded(*It))
+			{
+				for (const FTextureSetMaterialBinding& Binding : BindingsToApply)
 				{
-					const UTextureSet* TextureSet = Cast<UTextureSet>(Param.ParameterValue);
-					if (IsValid(TextureSet) && MaterialInstancesToUpdate.Contains(TextureSet))
+					UTextureSetsBlueprintFunctionLibrary::ApplyTextureSetParameterToMaterialInstance(
+						*It,
+						Binding.ParameterInfo,
+						Binding.TextureSet.Get(),
+						false);
+				}
+			}
+			else
+			{
+				for (const FTextureSetMaterialBinding& Binding : BindingsToApply)
+				{
+					if (IsValid(Binding.TextureSet))
 					{
-						ContainedTextureSet = TextureSet;
-						break; // Don't need to check other properties, since we've already refreshed this one
+						PostponedMaterialInstances.Add(Binding.TextureSet.Get());
 					}
-				}
-			}
-			
-			if (IsValid(ContainedTextureSet))
-			{
-				if (AllDependenciesLoaded(*It))
-				{
-					FPropertyChangedEvent Event(nullptr);
-					It->PostEditChangeProperty(Event);
-				}
-				else
-				{
-					PostponedMaterialInstances.Add(ContainedTextureSet);
 				}
 			}
 		}
@@ -571,13 +562,13 @@ void FTextureSetCompilingManager::AssignDerivedData(UTextureSetDerivedData* NewD
 	NewDerivedData->Rename(*DerivedDataName, TextureSet, RenameFlags);
 	TextureSet->DerivedData = NewDerivedData;
 
-	// Default texture set derived textures need to be public so they can be referenced as default textures in the generated graphs.
-	if (TextureSet->IsDefaultTextureSet())
-	{
-		NewDerivedData->SetFlags(RF_Public);
+	// The plugin-only port stores direct texture references in material instances and graph defaults.
+	// Keep all derived objects public so cross-package references remain legal.
+	NewDerivedData->SetFlags(RF_Public);
 
-		for (FDerivedTexture& DerivedTexture : NewDerivedData->Textures)
-			DerivedTexture.Texture->SetFlags(RF_Public);
+	for (FDerivedTexture& DerivedTexture : NewDerivedData->Textures)
+	{
+		DerivedTexture.Texture->SetFlags(RF_Public);
 	}
 }
 

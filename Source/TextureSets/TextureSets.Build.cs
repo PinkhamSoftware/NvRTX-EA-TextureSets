@@ -21,6 +21,7 @@ public class TextureSets : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
+				"AssetRegistry",
 				"CoreUObject",
 				"Engine",
 				"Projects",

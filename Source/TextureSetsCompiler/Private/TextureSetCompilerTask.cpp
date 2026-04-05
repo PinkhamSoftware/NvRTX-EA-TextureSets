@@ -8,7 +8,6 @@
 #include "Engine/Texture2DArray.h"
 #include "TextureSetCompiler.h"
 #include "TextureSetDerivedData.h"
-#include "TextureSetTextureSourceProvider.h"
 
 class TextureSetDerivedTextureDataPlugin : public FDerivedDataPluginInterface
 {
@@ -78,10 +77,9 @@ private:
 	const FName ParameterName;
 };
 
-FTextureSetCompilerTaskWorker::FTextureSetCompilerTaskWorker (TSharedRef<FTextureSetCompiler> Compiler, UTextureSetDerivedData* DerivedData, bool bIsDefaultTextureSet)
+FTextureSetCompilerTaskWorker::FTextureSetCompilerTaskWorker (TSharedRef<FTextureSetCompiler> Compiler, UTextureSetDerivedData* DerivedData)
 	: Compiler(Compiler)
 	, DerivedData(DerivedData)
-	, bIsDefaultTextureSet(bIsDefaultTextureSet)
 {}
 
 void FTextureSetCompilerTaskWorker::DoWork()
@@ -103,9 +101,9 @@ void FTextureSetCompilerTaskWorker::DoWork()
 			DataReader << DerivedTexture.Data;
 		}
 
-		// For default texture sets, we need to ensure they have valid source
-		// data, since we will be not have a UTextureSetTextureSourceProvider.
-		if (bIsDefaultTextureSet && DerivedTexture.TextureState < EDerivedTextureState::SourceGenerated)
+		// Stock UE5.7 does not provide TextureSourceProvider hooks. Ensure
+		// every derived texture has source data generated before texture build.
+		if (DerivedTexture.TextureState < EDerivedTextureState::SourceGenerated)
 		{
 			Compiler->GenerateTextureSource(DerivedData->Textures[t], t);
 		}
@@ -131,12 +129,10 @@ void FTextureSetCompilerTaskWorker::DoWork()
 	});
 }
 
-TextureSetCompilerTask::TextureSetCompilerTask(TSharedRef<FTextureSetCompiler> Compiler, bool bIsDefaultTextureSet)
+TextureSetCompilerTask::TextureSetCompilerTask(TSharedRef<FTextureSetCompiler> Compiler)
 	: Compiler(Compiler)
 	, DerivedData(nullptr)
-	, bIsDefaultTextureSet(bIsDefaultTextureSet)
 	, bHasBeganTextureCache(false)
-	, bHasAddedSourceProviders(false)
 	, bHasFinalized(false)
 {
 }
@@ -144,7 +140,7 @@ TextureSetCompilerTask::TextureSetCompilerTask(TSharedRef<FTextureSetCompiler> C
 void TextureSetCompilerTask::Start()
 {
 	CreateDerivedData();
-	AsyncTask = MakeUnique<FAsyncTask<FTextureSetCompilerTaskWorker>>(Compiler, DerivedData.Get(), bIsDefaultTextureSet);
+	AsyncTask = MakeUnique<FAsyncTask<FTextureSetCompilerTaskWorker>>(Compiler, DerivedData.Get());
 
 	AsyncTask->StartSynchronousTask(EQueuedWorkPriority::Blocking);
 }
@@ -152,7 +148,7 @@ void TextureSetCompilerTask::Start()
 void TextureSetCompilerTask::StartAsync(FQueuedThreadPool* InQueuedPool, EQueuedWorkPriority InQueuedWorkPriority)
 {
 	CreateDerivedData();
-	AsyncTask = MakeUnique<FAsyncTask<FTextureSetCompilerTaskWorker>>(Compiler, DerivedData.Get(), bIsDefaultTextureSet);
+	AsyncTask = MakeUnique<FAsyncTask<FTextureSetCompilerTaskWorker>>(Compiler, DerivedData.Get());
 
 	AsyncTask->StartBackgroundTask(InQueuedPool, InQueuedWorkPriority);
 }
@@ -167,20 +163,6 @@ bool TextureSetCompilerTask::TryFinalize()
 
 	if (!AsyncTask || !AsyncTask->IsDone())
 		return false;
-
-	// Default texture sets don't use transient source data as they're generally 4x4 so can store their source data more easily.
-	if (!bIsDefaultTextureSet && !bHasAddedSourceProviders)
-	{
-		for (int t = 0; t < DerivedData->Textures.Num(); t++)
-		{
-			// Create source provider, which will fill in the source data on demand prior to a texture build 
-			UTextureSetTextureSourceProvider* SourceProvider = NewObject<UTextureSetTextureSourceProvider>(DerivedData->Textures[t].Texture);
-			SourceProvider->CompilerArgs = Compiler->Args;
-			SourceProvider->Index = t;
-			DerivedData->Textures[t].Texture->TextureSourceProvider = SourceProvider;
-		}
-		bHasAddedSourceProviders = true;
-	}
 
 	if (!bHasBeganTextureCache && FApp::CanEverRender())
 	{
@@ -210,15 +192,6 @@ bool TextureSetCompilerTask::TryFinalize()
 				// We will continue to return false here until we have a valid texture
 				return false;
 			}
-		}
-	}
-
-	// Ensure all source textures are freed
-	if (bHasAddedSourceProviders)
-	{
-		for (int t = 0; t < DerivedData->Textures.Num(); t++)
-		{
-			Compiler->FreeTextureSource(DerivedData->Textures[t], t);
 		}
 	}
 
